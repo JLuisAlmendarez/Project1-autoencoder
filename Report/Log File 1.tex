@@ -8,6 +8,7 @@
 \usepackage{algorithm}
 \usepackage{algpseudocode}
 \usepackage{lipsum} % Para generar texto Lorem Ipsum
+\usepackage[section]{placeins}
 
 % ============= MÁRGENES =============
 \usepackage[
@@ -56,17 +57,26 @@
 % ============= TITLE PAGE =============
 \begin{titlepage}
     \centering
-    \vspace*{2cm}
+    \vspace*{4cm}
     
     {\Huge\bfseries Variational Auto encoder for Shoes Image Reconstruction \par}
     \vspace{1.5cm}
     
-    {\Large\itshape Computational Interfaces for Numerical Processes and Formal Construction and implementation of Autoencoders\par}
-    \vspace{2cm}
-    
-    {\Large Jose Luis Almendarez Gonzalez\par}
-    \vspace{0.5cm}
+    {\Large José Luis Almendarez Gonzalez\par}
     {\large jose.almendarez@iteso.mx\par}
+    \vspace*{1em}
+
+    {\Large José Ivan Sandoval Ruiz Velasco\par}
+    {\large ivan.sandoval@iteso.mx\par}
+    \vspace*{1em}
+    
+    {\Large Maximiliano Aguayo Villanueva\par}
+    {\large maximiliano.aguayo@iteso.mx\par}
+    \vspace*{1em}
+
+    
+
+    \vspace{0.5cm}
     \vspace{1cm}
     
     {\large ITESO university\par}
@@ -77,10 +87,10 @@
 
 % ============= ABSTRACT =============
 \begin{abstract}
-lorem ipsum
+This paper presents the design, implementation, and evaluation of a Convolutional Variational Autoencoder (CVAE) applied to shoe image reconstruction and latent-space generation. The model is trained on a dataset of shoe images collected via web scraping from StockX, resized to $64 \times 64$ pixels, and normalized to $[0,1]$. We investigate the effect of the $\beta$ hyperparameter on the trade-off between reconstruction fidelity and generative quality of the latent space. Training is conducted on Apple M2 unified memory using TensorFlow, with a Cosine Decay learning rate schedule. Two dataset configurations are compared: a small set of 177 images and an extended set of 1,220 images. Results show that dataset size does not significantly affect the model’s parametrization in terms of reconstruction loss, though it can improve the consistency of latent space representations when exploring latent trajectories. Additionally, $\beta = 1.0$ (standard VAE) provides a reasonable balance between reconstruction loss and KL regularization. Future work proposes the incorporation of perceptual loss functions and adaptive learning rate schedulers to further improve generative quality.
 \vspace{0.5cm}
 
-\noindent\textbf{Keywords:} a, b, c
+\noindent\textbf{Keywords:} Variational Autoencoder, image generation, latent space, shoe dataset, deep learning, TensorFlow
 \end{abstract}
 
 \newpage
@@ -98,9 +108,77 @@ This work goes beyond conducting a Variational Auto-encoder (VAE) experiment and
 In an era where machine learning and engineering knowledge and implementations are widely and easy accessible. The challenge is no longer just build models, but to really know well the process behind it. Methodological transparency, and interpretability become essential components of responsible research. Without a structured approach, experiments risk becoming isolated technical exercises rather than cumulative scientific contributions.
 
 This paper therefore emphasizes the importance of consolidating knowledge through a consistent design methodology. By explicitly documenting architectural reasoning, implementation versioning, and memory behavior during training, we aim to provide a replicable and educational blueprint for neural network development. Such a framework not only supports experimental validation but also encourages deeper internalization of computational and theoretical principles.
+Corregir, ser mas humilde y no asumir 
 
 % ============= MATHEMATICAL FOUNDATIONS =============
 \section{Mathematical Basis and Network Architecture Design}
+
+A Variational Autoencoder (VAE) is a generative model that learns a probabilistic mapping between an input space $\mathcal{X}$ and a continuous latent space $\mathcal{Z}$. Unlike a standard autoencoder, the encoder does not map inputs to a single point in latent space, but rather to a distribution $q_\phi(z \mid x)$, typically parameterized as a multivariate Gaussian:
+
+\begin{equation}
+    q_\phi(z \mid x) = \mathcal{N}(z;\, \mu_\phi(x),\, \sigma^2_\phi(x) \mathbf{I})
+\end{equation}
+
+The decoder then learns the conditional distribution $p_\theta(x \mid z)$, which reconstructs the input from a sampled latent vector.
+
+\subsection{ELBO Loss}
+
+Training a VAE maximizes the Evidence Lower Bound (ELBO), which decomposes into two terms:
+
+\begin{equation}
+    \mathcal{L}(\theta, \phi; x) = \mathbb{E}_{q_\phi(z|x)}\left[\log p_\theta(x \mid z)\right] - D_{\mathrm{KL}}\left(q_\phi(z \mid x) \;\|\; p(z)\right)
+\end{equation}
+
+The first term is the reconstruction loss, which measures how well the decoder recovers the input. In our implementation this is the mean squared error (MSE) summed over pixels:
+
+\begin{equation}
+    \mathcal{L}_{\mathrm{recon}} = \mathbb{E}\left[\sum_{i} (x_i - \hat{x}_i)^2\right]
+\end{equation}
+
+The second term is the KL divergence between the approximate posterior and the prior $p(z) = \mathcal{N}(0, \mathbf{I})$, which regularizes the latent space:
+
+\begin{equation}
+    \mathcal{L}_{\mathrm{KL}} = -\frac{1}{2} \sum_{j=1}^{d} \left(1 + \log \sigma_j^2 - \mu_j^2 - \sigma_j^2\right)
+\end{equation}
+
+Following the $\beta$-VAE formulation \cite{higgins2017}, the total loss is:
+
+\begin{equation}
+    \mathcal{L}_{\mathrm{total}} = \mathcal{L}_{\mathrm{recon}} + \beta \cdot \mathcal{L}_{\mathrm{KL}}
+\end{equation}
+
+where $\beta \geq 1$ controls the strength of KL regularization. Higher $\beta$ encourages a more structured latent space at the cost of reconstruction fidelity.
+
+\subsection{Reparameterization Trick}
+
+To enable backpropagation through the stochastic sampling step, the reparameterization trick is applied:
+
+\begin{equation}
+    z = \mu + \sigma \odot \varepsilon, \quad \varepsilon \sim \mathcal{N}(0, \mathbf{I})
+\end{equation}
+
+This decouples the randomness from the learnable parameters, making gradient computation tractable.
+
+\subsection{Network Architecture}
+
+The encoder consists of five convolutional layers with stride 2, progressively increasing the number of filters from 32 to 512, followed by a fully connected layer of 256 units. The output is split into two heads: $\mu_\phi$ and $\log \sigma^2_\phi$, each of dimension $d = 128$.
+
+The decoder mirrors this structure using transposed convolutions, starting from a $2 \times 2 \times 512$ spatial representation and upsampling to $64 \times 64 \times 3$. A sigmoid activation in the final layer constrains outputs to $[0,1]$.
+
+\begin{table}[h]
+\centering
+\caption{Encoder architecture summary.}
+\begin{tabular}{lll}
+Layer & Output Shape & Parameters \\
+Conv2D(32, 3, stride=2) & $32 \times 32 \times 32$ & 896 \\
+Conv2D(64, 3, stride=2) & $16 \times 16 \times 64$ & 18,496 \\
+Conv2D(128, 3, stride=2) & $8 \times 8 \times 128$ & 73,856 \\
+Conv2D(256, 3, stride=2) & $4 \times 4 \times 256$ & 295,168 \\
+Conv2D(512, 3, stride=2) & $2 \times 2 \times 512$ & 1,180,160 \\
+Flatten + Dense(256) & 256 & 524,544 \\
+Dense($\mu$), Dense($\log\sigma^2$) & 128 each & 32,896 \\
+\end{tabular}
+\end{table}
 
 
 % ============= EXPERIMENTAL METHODOLOGY =============
@@ -127,55 +205,168 @@ During the analysis, we examined the distribution of image sizes and color profi
 
 \subsubsection{Preprocessing}
 
-In the preprocessing phase, the RGB color representation of each image was preserved, providing three channels per pixel. Additionally, all images were rescaled to a fixed resolution of 800 × 571 pixels to eliminate size outliers. This resolution results in a total of 456,800 pixels per image, which corresponds to 1,370,400 elements when considering all three channels. The data was first transformed from an $800 \times 571 \times 3$ tensor into a $1,370,400$-element 1D vector, and the vector elements were then normalized to the range [0, 1] to standardize the input for subsequent model training. 
+In the preprocessing phase, the RGB color representation of each image was preserved, providing three channels per pixel. All images were resized to $64 \times 64$ pixels to standardize the input resolution and reduce computational cost. Pixel values were normalized to the range $[0, 1]$ by dividing by 255. The dataset was split such that training was performed on either 177 or 1{,}220 images depending on the experiment.
 
 
 \subsection{Implementation Setup}
+
 \subsubsection{Code}
+
+The model was implemented in TensorFlow 2.16.2 using the Keras subclassing API. The \texttt{ConvVAE} class overrides \texttt{train\_step} and \texttt{test\_step} to compute the full ELBO loss internally, without relying on Keras's built-in \texttt{compile(loss=...)} mechanism. This ensures that both \(\mathcal{L}_{\mathrm{recon}}\) and \(\mathcal{L}_{\mathrm{KL}}\) receive gradients correctly in every training step. The sampling layer implements the reparameterization trick as a custom \texttt{tf.keras.layers.Layer}.
+
 \subsubsection{Memory consideration}
+
+All experiments were conducted on an Apple M2 processor with unified memory architecture. In this setting, CPU and GPU share the same physical memory pool which means the same datapath and clock, which means that VRAM and RAM are not independently measurable through standard TensorFlow APIs. The \texttt{tf.config.experimental.get\_memory\_info('GPU:0')} call returns zero under this configuration, as TensorFlow does not expose Apple's Metal backend memory statistics through this interface. Consequently, memory usage was monitored at the process level using \texttt{psutil}, which reported RAM consumption in the range of 400--900 MB during training. Full computational profiling with CUDA metrics is deferred to future work on NVIDIA hardware.
+
 \subsection{Training Procedure}
 
-\textbf{Experiment 1.}
-\\	
-A
-\\
+The optimizer used in all experiments is Adam \cite{kingma2014adam}. The learning rate follows a Cosine Decay schedule:
 
-\textbf{Experiment 2.}
-\\
-A
-\\
+\begin{equation}
+    \eta_t = \eta_{\min} + \frac{1}{2}(\eta_0 - \eta_{\min})\left(1 + \cos\left(\frac{\pi \cdot t}{T}\right)\right)
+\end{equation}
+
+where $\eta_0 = 10^{-3}$ is the initial learning rate, $\eta_{\min} = 10^{-6}$ is the minimum, $t$ is the current step, and $T$ is the total number of training steps. This schedule provides a smooth decay that avoids abrupt learning rate changes and has been found empirically effective for this architecture.
+
+\textbf{Experiment 1: Small Dataset (177 images, $\beta = 1.0$)}
+
+The model was trained for 2000 epochs on 177 images with batch size 32, yielding 6 batches per epoch. The standard VAE objective ($\beta = 1.0$) was used. This experiment serves as a baseline to evaluate model behavior.
+
+\textbf{Experiment 2: Extended Dataset (1{,}220 images, $\beta = 1.0$)}
+
+The model was trained for 500 epochs on 1{,}220 images with the same architecture and hyperparameters. This experiment evaluates whether increased dataset size produces measurably better reconstruction and generative quality.
+
 
 \subsection{Evaluation Metrics}
+\subsubsection{Reconstruction Loss}
 
-\subsubsection{loss rate}
+The primary metric is the reconstruction loss $\mathcal{L}_{\mathrm{recon}}$, computed as the mean squared error summed over all pixels and averaged over the batch. A lower value indicates higher fidelity between input and reconstructed images. This metric is monitored per epoch and serves as the main indicator of model convergence.
 
-% ============= COMPUTATIONAL ANALYSIS OF THE EXPERIMENT =============
-\section{Memory Management and Information Dynamics}
+\subsubsection{KL Divergence Loss}
 
-% ============= FORMAL ANALYSIS OF THE MODEL =============
-\section{Internal Network Rules and Formal Characterization}
-Evolucion temporal, ecuaciones diferenciales parciales del entrenamiento, espacio latente en regiones de la matriz Ax y Zx
+The KL loss $\mathcal{L}_{\mathrm{KL}}$ measures the degree of regularization applied to the latent space. An increasing KL loss during training indicates that the encoder is learning to use the latent dimensions meaningfully, rather than collapsing to the prior. However, excessively high KL values relative to reconstruction loss may indicate posterior collapse or insufficient reconstruction capacity.
 
+% ============= Results =============
+\section{Results}
+
+\begin{table}[h]
+\centering
+\caption{Final training metrics with $\beta = 1.0$.}
+\label{tab:results}
+\begin{tabular}{lrrrr}
+Dataset size & Epochs & Total loss & Reconstruction loss & KL loss \\
+177 images   & 2000  & 25.21  & 13.03  & 12.19 \\
+1{,}220 images & 500 & 84.10 & 68.87 & 15.23 \\
+\end{tabular}
+\end{table}
+The small dataset achieves a lower absolute reconstruction loss due to overfitting — the model memorizes 177 images effectively. The extended dataset shows higher absolute loss but generalizes better, producing visually coherent reconstructions with recognizable shoe shapes and colors across unseen batch samples.
+
+Visual inspection of reconstructed images confirms that the extended dataset model captures geometric structure (silhouette, sole, overall shape) more robustly, while the small dataset model produces sharper reconstructions that are closer to memorization than generalization.
+
+Generated images sampled from the prior $\mathcal{N}(0, \mathbf{I})$ show recognizable shoe shapes in both experiments, confirming that the KL regularization successfully constrains the latent space. However, generated images exhibit blurriness and color mixing artifacts, consistent with the known limitation of MSE-based reconstruction in VAEs.
+
+\begin{figure}[h]
+    \centering
+    \makebox[\textwidth][c]{%
+        \includegraphics[width=25em,keepaspectratio]{Images/177_latent_space.png}%
+    }
+    \caption{Visualization of the latent space for the 177-image dataset using PCA.}
+    \label{fig:latent_space_177}
+\end{figure}
+
+\begin{figure}[h]
+    \centering
+    \makebox[\textwidth][c]{%
+        \includegraphics[width=25em,keepaspectratio]{Images/latent_space_view.png}%
+    }
+    \caption{Alternate view of the latent space as interpolation between data points.}
+    \label{fig:latent_space_view}
+\end{figure}
+
+\begin{figure}[h]
+    \centering
+    \makebox[\textwidth][c]{%
+        \includegraphics[width=25em,keepaspectratio]{Images/reconstrucciones.png}%
+    }
+    \caption{Comparison between original shoe images and their reconstructions by the CVAE.}
+    \label{fig:reconstructions}
+\end{figure}
+
+\begin{figure}[h]
+    \centering
+    \makebox[\textwidth][c]{%
+        \includegraphics[width=15em,keepaspectratio]{Images/imagen_generada_original.png}%
+    }
+    \caption{Example of a novel shoe image generated from the latent space.}
+    \label{fig:generated_image}
+\end{figure}
+
+\begin{figure}[h]
+    \centering
+    \makebox[\textwidth][c]{%
+        \includegraphics[width=35em,keepaspectratio]{Images/tacon_a_tenis.png}%
+    }
+    \caption{Interpolation between two shoe types in the latent space (high heel to sneaker).}
+    \label{fig:interpolation_shoes}
+\end{figure}
+
+
+\FloatBarrier
 % ============= CONCLUSIONS =============
 \section{Conclusions}
 
+This work demonstrates that a Convolutional VAE can learn meaningful latent representations of shoe images for both reconstruction and generation tasks. The standard VAE objective ($\beta = 1.0$) provides a reasonable balance between reconstruction fidelity and latent space regularity. Dataset size has a significant impact on generalization — increasing from 177 to 1{,}220 images produces visibly more coherent structured latent spaces.
+
+The primary limitation observed is blurriness in generated images, which is an inherent consequence of using pixel-wise MSE as the reconstruction objective. MSE encourages the model to produce the statistical average of plausible outputs, which manifests as blurry, color-mixed images when sampled from the prior.
 
 \subsection{Future Work}
+
+Several directions are identified for improving generative quality:
+
+\textbf{Perceptual loss.} Replacing or augmenting the MSE reconstruction loss with a perceptual loss computed in the feature space of a pretrained network (e.g., VGG) would penalize structural and textural differences rather than pixel-level discrepancies. This is expected to significantly reduce blurriness in reconstructions and generations.
+
+\textbf{Adaptive learning rate scheduling.} A custom adaptive scheduler that adjusts the learning rate based on loss magnitude and trend — rather than a fixed decay schedule — could improve convergence behavior, particularly under data-scarce conditions where the loss landscape is noisy. Future experiments will evaluate a three-phase adaptive scheduler (acceleration, exploration, fine-tuning) against the Cosine Decay baseline.
+
+\textbf{CUDA profiling.} All experiments in this work were conducted on Apple M2 unified memory. Future work will replicate experiments on NVIDIA hardware to enable full computational profiling, including GPU utilization, VRAM consumption, and energy efficiency metrics measured in FLOPs per watt.
+
+\textbf{Dataset expansion.} Scaling the dataset beyond 1{,}220 images is expected to yield the largest quality improvement. With 5{,}000 or more images, the VAE would have sufficient density in the latent space to produce sharp and diverse generations.
 
 
 % ============= ACKNOWLEDGMENTS =============
 \section*{Acknowledgments}
 
+The authors would like to thank their pets for providing emotional support throughout this work. We also extend our gratitude to Professor Ivan for his clear explanations and foundational guidance, which greatly facilitated the completion of these experiments.
 
 % ============= REFERENCES =============
 \addcontentsline{toc}{section}{References}
 
 \begin{thebibliography}{99}
 
-\bibitem{ejemplo2023modelo}
-Pérez, J., López, M., \& García, A. (2023).
-\textit{Un modelo de ejemplo para aprendizaje automático}.
-Revista Latinoamericana de Ciencia de Datos, 12(3), 45--60.
+\bibitem{tensorflow}
+TensorFlow Developers. (2024).
+\textit{TensorFlow} (Version 2.x).
+https://www.tensorflow.org
+
+\bibitem{keras}
+Chollet, F., et al. (2024).
+\textit{Keras}.
+https://keras.io
+
+
+\bibitem{plotly}
+Plotly Technologies Inc. (2015).
+\textit{Collaborative data science}.
+https://plotly.com
+
+\bibitem{stockx}
+StockX. (2024).
+\textit{StockX marketplace}.
+https://stockx.com
+
+\bibitem{cosine_decay}
+TensorFlow. (2024).
+\textit{tf.keras.optimizers.schedules.CosineDecay}.
+https://www.tensorflow.org/api\_docs/python/tf/keras/optimizers/schedules/CosineDecay
 
 
 \end{thebibliography}

@@ -41,11 +41,13 @@ env/
 *.synctex.gz
 
 # =========================
-# Dataset pesado
+# Carpetas
 # =========================
 Dataset/ZAPATOS.zip
 Dataset/preprocessed/
 Dataset/ZAPATOS/
+Code/design/logs
+Code/design/logs/fit
 
 # =========================
 # Otros temporales
