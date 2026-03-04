@@ -1,0 +1,2 @@
+(Path)
+/home/jose-luis/Documents/NVIDIA Nsight Compute/report1.nsys-rep

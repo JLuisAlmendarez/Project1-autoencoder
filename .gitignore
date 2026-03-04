@@ -45,9 +45,12 @@ env/
 # =========================
 Dataset/ZAPATOS.zip
 Dataset/preprocessed/
+Dataset/preprocessed/total
+Dataset/preprocessed/unique
 Dataset/ZAPATOS/
 Code/design/logs
 Code/design/logs/fit
+Code/design/cvae_model
 
 # =========================
 # Otros temporales
