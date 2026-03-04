@@ -57,3 +57,4 @@ Code/design/cvae_model
 # =========================
 *.tmp
 *.swp
+Code/profiling/nsight-report.json
