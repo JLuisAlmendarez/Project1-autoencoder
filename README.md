@@ -1,5 +1,5 @@
 # Variational Autoencoder for Shoes
-
+```
 Image Reconstruction
 ├── README.md                   <- This file.
 │
@@ -31,3 +31,4 @@ Image Reconstruction
     ├── Log File 1.tex          <- LaTeX source of the academic report.
     ├── Log File 1.pdf          <- Compiled PDF report.
     └── Images                  <- Figures used in the report.
+```
